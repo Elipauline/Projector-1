@@ -1,14 +1,17 @@
 package org.noisesmith.projector;
 
-import java.util.Collections;
 import java.util.Arrays;
-import java.util.LinkedList;
+import java.util.ArrayDeque;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.io.File;
 import javax.swing.SwingUtilities;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
 import java.awt.Dimension;
 import java.awt.Graphics;
+import java.awt.Rectangle;
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import javax.imageio.ImageIO;
 import java.util.concurrent.SynchronousQueue;
@@ -34,13 +37,12 @@ public class Projector {
     }
     private static File[] getImages(File[] files) {
         Arrays.sort(files);
-        LinkedList<File> images = new LinkedList<File>();
+        ArrayDeque<File> images = new ArrayDeque<File>();
         for(File f : files) {
             for(File child : getImages(f)) {
-                images.push(child);
+                images.addLast(child);
             }
         }
-        Collections.reverse(images);
         return images.toArray(new File[0]);
     }
     private static File[] getImages(File top) {
@@ -67,20 +69,33 @@ public class Projector {
 class ProjectorPanel extends JPanel {
     String eventStatus = "";
     BufferedImage[] images;
-    int position;
+    int imageIndex;
+    double imageHeight;
+    public double scrolldelta = 1.1;
+    public double scrollspeed = 1.0;
 
     void loadImages(File[] files) {
-        position = 0;
-        images = new BufferedImage[files.length];
-        try {
-            for(int i = 0; i < images.length; i++) {
-                images[i] = ImageIO.read(files[i]);
+        ArrayDeque<BufferedImage> deq = new ArrayDeque<BufferedImage>();
+        imageIndex = 0;
+        for(File file : files) {
+            try {
+                deq.addLast(ImageIO.read(file));
+            } catch (Exception e) {
+                System.out.println("could not load image " + file);
+                e.printStackTrace();
             }
-        }catch (Exception e) {
-            System.out.println("could not load images");
-            e.printStackTrace();
-            images = new BufferedImage[0];
         }
+        images = deq.toArray(new BufferedImage[0]);
+    }
+
+    TimerTask scroller () {
+        return new TimerTask() {
+            @Override
+            public void run () {
+                scrollspeed *= scrolldelta;
+                imageHeight += scrollspeed;
+            }
+        };
     }
 
     public ProjectorPanel(final SynchronousQueue<FootPedal.Event> queue,
@@ -88,15 +103,44 @@ class ProjectorPanel extends JPanel {
         loadImages(imgs);
         Thread midi = new Thread(new Runnable() {
                 public void run() {
+                    Timer periodic = new Timer("projector periodic");
+                    TimerTask task = null;
                     while(true) {
                         try {
                             FootPedal.Event evt = queue.take();
                             eventStatus = evt.toString();
+                            if (evt.type == FootPedal.Events.FOOT_UP) {
+                                if (task != null) task.cancel();
+                                task = null;
+                                periodic.purge();
+                            }
                             if (evt.type == FootPedal.Events.FOOT_DOWN) {
-                                if (evt.parameter == 1) {
-                                    position--;
-                                } else if (evt.parameter == 2) {
-                                    position++;
+                                switch (evt.parameter) {
+                                case 1:
+                                    imageIndex--;
+                                    imageHeight = 0;
+                                    break;
+                                case 2:
+                                    imageIndex++;
+                                    imageHeight = 0;
+                                    break;
+                                case 6:
+                                    if (task != null) task.cancel();
+                                    task = null;
+                                    periodic.purge();
+                                    scrollspeed = -5.0;
+                                    task = scroller();
+                                    periodic.schedule(task, 0, 100);
+                                    break;
+                                case 7:
+                                    if (task != null) task.cancel();
+                                    task = null;
+                                    periodic.purge();
+                                    scrollspeed = 5.0;
+                                    task = scroller();
+                                    periodic.schedule(task, 0, 100);
+                                    break;
+                                default:
                                 }
                             }
                             repaint();
@@ -115,12 +159,17 @@ class ProjectorPanel extends JPanel {
 
     public void paintComponent(Graphics g) {
         super.paintComponent(g);
-        g.drawString("At " + System.currentTimeMillis() + " " + eventStatus,
-                     10, 20);
-        while (position < 0) position += images.length;
-        position %= images.length;
-        if(images[position] != null)
-            g.drawImage(images[position], 10, 50, null);
-        repaint(10, 20, 500, 200);
+        Rectangle rect = new Rectangle();
+        rect = g.getClipBounds(rect);
+        g.setColor(Color.BLACK);
+        g.fillRect(0, 0, (int) rect.getWidth(), (int) rect.getHeight());
+        // g.drawString("At " + System.currentTimeMillis() + " " + eventStatus,
+        // 10, 20);
+        while (imageIndex < 0) imageIndex += images.length;
+        imageIndex %= images.length;
+        BufferedImage i = images[imageIndex];
+        int offset = (int) (rect.getWidth() - i.getWidth()) / 2;
+        g.drawImage(images[imageIndex], offset, (int) imageHeight, null);
+        repaint(0, 0, (int) rect.getWidth(), (int) rect.getHeight());
     }
 }

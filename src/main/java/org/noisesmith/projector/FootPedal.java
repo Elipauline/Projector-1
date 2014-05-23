@@ -18,15 +18,17 @@ public class FootPedal {
             if(infos[i].getName().matches(match))
                 try {
                     dev = MidiSystem.getMidiDevice(infos[i]);
-                    System.out.println("opening " + infos[i].getName());
+                    System.out.println("opening MIDI device " +
+                                       infos[i].getName());
                     Transmitter trans = dev.getTransmitter();
                     receive = new MidiReceiver(dev.getDeviceInfo().toString(),
                                                queue);
                     trans.setReceiver(receive);
                     dev.open();
-                    System.out.println(dev.getDeviceInfo()+" was opened");
+                    System.out.println(dev.getDeviceInfo() +
+                                       " was opened for input.");
                 } catch (javax.sound.midi.MidiUnavailableException e) {
-                    System.out.println("error opening device " +
+                    System.out.println("error opening MIDI device " +
                                        infos[i] + " for input");
                 }
         }
@@ -80,7 +82,7 @@ public class FootPedal {
         public void send(MidiMessage msg, long timeStamp) {
             byte[] message = msg.getMessage();
             Event event = new Event(message);
-            System.out.println("Event: " + event);
+            // System.out.println("Event: " + event);
             try {
                 queue.put(event);
             } catch (Exception e) {
