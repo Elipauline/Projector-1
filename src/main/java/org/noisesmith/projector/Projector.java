@@ -93,6 +93,7 @@ class ProjectorPanel extends JPanel {
             @Override
             public void run () {
                 scrollspeed *= scrolldelta;
+                scrollspeed = Math.min(scrollspeed, 7.0);
                 imageHeight += scrollspeed;
             }
         };
@@ -128,7 +129,7 @@ class ProjectorPanel extends JPanel {
                                     if (task != null) task.cancel();
                                     task = null;
                                     periodic.purge();
-                                    scrollspeed = -5.0;
+                                    scrollspeed = -1.0;
                                     task = scroller();
                                     periodic.schedule(task, 0, 100);
                                     break;
@@ -136,7 +137,7 @@ class ProjectorPanel extends JPanel {
                                     if (task != null) task.cancel();
                                     task = null;
                                     periodic.purge();
-                                    scrollspeed = 5.0;
+                                    scrollspeed = 1.0;
                                     task = scroller();
                                     periodic.schedule(task, 0, 100);
                                     break;
